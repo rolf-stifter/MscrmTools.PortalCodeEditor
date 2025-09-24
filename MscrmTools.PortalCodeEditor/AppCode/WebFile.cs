@@ -261,19 +261,36 @@ namespace MscrmTools.PortalCodeEditor.AppCode
 
             var response = (InitializeFileBlocksDownloadResponse)service.Execute(request);
 
-            var dlRequest = new DownloadBlockRequest
-            {
-                Offset = 0,
-                BlockLength = response.FileSizeInBytes,
-                FileContinuationToken = response.FileContinuationToken
-            };
+            long fileSize = response.FileSizeInBytes;
+            string continuationToken = response.FileContinuationToken;
+            long offset = 0;
+            const int chunkSize = 4 * 1024 * 1024; // 4MB
+            var fileBytes = new List<byte>();
 
-            var dlResponse = (DownloadBlockResponse)service.Execute(dlRequest);
-            string content;
-            using (var stream = new StreamReader(new MemoryStream(dlResponse.Data), true))
+            while (offset < fileSize)
             {
-                return stream.ReadToEnd();
+                int bytesToRead = (int)Math.Min(chunkSize, fileSize - offset);
+
+                var dlRequest = new DownloadBlockRequest
+                {
+                    Offset = offset,
+                    BlockLength = bytesToRead,
+                    FileContinuationToken = continuationToken
+                };
+
+                var dlResponse = (DownloadBlockResponse)service.Execute(dlRequest);
+
+                fileBytes.AddRange(dlResponse.Data);
+                offset += bytesToRead;
             }
+
+            string content;
+            using (var stream = new StreamReader(new MemoryStream(fileBytes.ToArray()), true))
+            {
+                content = stream.ReadToEnd();
+            }
+
+            return content;
         }
 
         #endregion Methods
